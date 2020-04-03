@@ -1,8 +1,10 @@
 package pfunc
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -18,59 +20,108 @@ const ExceptionStart string = "pfunc_exception_start_"
 const ExceptionEnd string = "pfunc_exception_end_"
 const PythonExecutable string = "python"
 
-func Invoke(scriptPath string, funcName string, params []interface{}) (interface{}, string, error) {
+// invoke result struct
+type PResult struct {
+	NoError            bool
+	JsonRepresentation string
+	Exception          error
+	TempScript         string
+}
+
+const PResultToString = `
+python function result: 
+    status:
+		%v
+	return value:
+%v
+	exception:
+%v
+	temp script:
+%v
+`
+
+func (pr PResult) String() string {
+	return fmt.Sprintf(PResultToString,
+		Select(pr.NoError, "success", "fail").(string),
+		TabString(pr.JsonRepresentation, 8),
+		TabString(pr.Exception.Error(), 8),
+		TabString(pr.TempScript, 8))
+}
+
+const ScriptTemplate string = `
+import traceback
+import json
+try:
+	result = {1}
+	print "{2}",
+	print json.dumps(result),
+	print "{3}",
+except Exception, e:
+	msg = traceback.format_exc()
+	print "{4}",
+	print msg,
+	print "{5}",
+`
+
+func Call(scriptPath string, funcName string, params ...interface{}) {
+	Invoke(scriptPath, funcName, params)
+}
+
+func Invoke(scriptPath string, funcName string, params []interface{}) PResult {
+	result := PResult{}
 	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-		return nil, "", fmt.Errorf("invoke python function error: python script not exists: %v: %v", scriptPath, err)
+		result.Exception = fmt.Errorf("invoke python function error: python script not exists: %v: %v", scriptPath, err)
+		return result
 	}
 
 	tempScript, err := generateTempScript(scriptPath, funcName, params)
 	if err != nil {
-		return nil, "", fmt.Errorf("invoke python function error: generate temp script error: %v", err)
+		result.Exception = fmt.Errorf("invoke python function error: generate temp script error: %v", err)
+		return result
 	}
+	result.TempScript = tempScript
 
 	cmd := exec.Command(PythonExecutable)
 
 	sin, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, tempScript, fmt.Errorf("invoke python function error: pipe stdin of python error: %v", err)
+		result.Exception = fmt.Errorf("invoke python function error: pipe stdin of python error: %v", err)
+		return result
 	}
 
 	sout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, tempScript, fmt.Errorf("invoke python function error: pipe stdout of python error: %v", err)
+		result.Exception = fmt.Errorf("invoke python function error: pipe stdout of python error: %v", err)
+		return result
 	}
 
 	err = cmd.Start()
 	if err != nil {
-		return nil, tempScript, fmt.Errorf("invoke python function error: %v", err)
+		result.Exception = fmt.Errorf("invoke python function error: %v", err)
+		return result
 	}
 
 	_, err = sin.Write([]byte(tempScript))
 	if err != nil {
-		return nil, tempScript, fmt.Errorf("invoke python function error: input python script to python error: %v", err)
+		result.Exception = fmt.Errorf("invoke python function error: input python script to python error: %v", err)
+		return result
 	}
 	sin.Close()
 
 	bs, err := ioutil.ReadAll(sout)
 	if err != nil {
-		return nil, tempScript, fmt.Errorf("invoke python function error: get python output error: %v", err)
+		result.Exception = fmt.Errorf("invoke python function error: get python output error: %v", err)
+		return result
 	}
 
 	output := string(bs)
-	result := SubStringBetween(output, ReturnValueStart, ReturnValueEnd)
-	exception := SubStringBetween(output, ExceptionStart, ExceptionEnd)
-	if len(exception) > 0 {
-		return nil, tempScript, fmt.Errorf("%s", exception)
-	} else if len(result) > 0 {
-		var r interface{}
-		err := json.Unmarshal([]byte(result), &r)
-		if err != nil {
-			return nil, tempScript, fmt.Errorf("invoke python function error: get python output error: %v", err)
-		}
-		return r, tempScript, nil
-	} else {
-		return nil, tempScript, nil
+	result.JsonRepresentation = SubStringBetween(output, ReturnValueStart, ReturnValueEnd)
+	result.Exception = errors.New(SubStringBetween(output, ExceptionStart, ExceptionEnd))
+
+	if len(result.Exception.Error()) < 1 {
+		result.NoError = true
 	}
+	return result
 }
 
 func generateTempScript(scriptPath string, funcName string, params []interface{}) (string, error) {
@@ -93,20 +144,7 @@ func generateTempScript(scriptPath string, funcName string, params []interface{}
 		return "", err
 	}
 
-	str := `
-import traceback
-import json
-try:
-	result = {1}
-	print "{2}"
-	print json.dumps(result)
-	print "{3}"
-except Exception, e:
-	msg = traceback.format_exc()
-	print "{4}"
-	print msg
-	print "{5}"
-`
+	str := ScriptTemplate
 	str = strings.Replace(str, "{1}", invoker, 1)
 	str = strings.Replace(str, "{2}", ReturnValueStart, 1)
 	str = strings.Replace(str, "{3}", ReturnValueEnd, 1)
@@ -168,4 +206,31 @@ func SubStringBetween(str string, prefix string, suffix string) string {
 		return str[start+len(prefix) : end]
 	}
 	return ""
+}
+
+func TabString(str string, tabSize int) string {
+	result := bytes.NewBufferString("")
+
+	buffer := bytes.NewBufferString(str)
+	scanner := bufio.NewScanner(buffer)
+
+	first := true
+	for scanner.Scan() {
+		if !first {
+			result.WriteString("\n")
+		} else {
+			first = false
+		}
+		result.WriteString(strings.Repeat(" ", tabSize))
+		result.WriteString(scanner.Text())
+	}
+	return result.String()
+}
+
+func Select(tf bool, a interface{}, b interface{}) interface{} {
+	if tf {
+		return a
+	} else {
+		return b
+	}
 }
