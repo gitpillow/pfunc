@@ -32,11 +32,11 @@ const PResultToString = `
 python function result: 
     status:
 		%v
-	return value:
+    return value:
 %v
-	exception:
+    exception:
 %v
-	temp script:
+    temp script:
 %v
 `
 
@@ -52,15 +52,15 @@ const ScriptTemplate string = `
 import traceback
 import json
 try:
-	result = {1}
-	print "{2}",
-	print json.dumps(result),
-	print "{3}",
+    result = {1}
+    print "{2}",
+    print json.dumps(result),
+    print "{3}",
 except Exception, e:
-	msg = traceback.format_exc()
-	print "{4}",
-	print msg,
-	print "{5}",
+    msg = traceback.format_exc()
+    print "{4}",
+    print msg,
+    print "{5}",
 `
 
 func Call(scriptPath string, funcName string, params ...interface{}) {
