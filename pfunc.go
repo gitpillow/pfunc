@@ -20,14 +20,6 @@ const ExceptionStart string = "pfunc_exception_start_"
 const ExceptionEnd string = "pfunc_exception_end_"
 const PythonExecutable string = "python"
 
-// invoke result struct
-type PResult struct {
-	NoError            bool
-	JsonRepresentation string
-	Exception          error
-	TempScript         string
-}
-
 const PResultToString = `
 python function result: 
     status:
@@ -40,6 +32,31 @@ python function result:
 %v
 `
 
+const Python2ScriptTemplate string = `
+from %s import %s
+import traceback
+import json
+try:
+%s
+    result = %s
+    print "%s",
+    print json.dumps(result),
+    print "%s",
+except Exception, e:
+    msg = traceback.format_exc()
+    print "%s",
+    print msg,
+    print "%s",
+`
+
+// invoke result struct
+type PResult struct {
+	NoError            bool
+	JsonRepresentation string
+	Exception          error
+	TempScript         string
+}
+
 func (pr PResult) String() string {
 	return fmt.Sprintf(PResultToString,
 		Select(pr.NoError, "success", "fail").(string),
@@ -48,23 +65,9 @@ func (pr PResult) String() string {
 		TabString(pr.TempScript, 8))
 }
 
-const ScriptTemplate string = `
-import traceback
-import json
-try:
-    result = {1}
-    print "{2}",
-    print json.dumps(result),
-    print "{3}",
-except Exception, e:
-    msg = traceback.format_exc()
-    print "{4}",
-    print msg,
-    print "{5}",
-`
 
-func Call(scriptPath string, funcName string, params ...interface{}) {
-	Invoke(scriptPath, funcName, params)
+func Call(scriptPath string, funcName string, params ...interface{}) PResult {
+	return Invoke(scriptPath, funcName, params)
 }
 
 func Invoke(scriptPath string, funcName string, params []interface{}) PResult {
@@ -124,6 +127,7 @@ func Invoke(scriptPath string, funcName string, params []interface{}) PResult {
 	return result
 }
 
+// generate temp script to send to python interpreter
 func generateTempScript(scriptPath string, funcName string, params []interface{}) (string, error) {
 	script := bytes.Buffer{}
 
@@ -131,30 +135,32 @@ func generateTempScript(scriptPath string, funcName string, params []interface{}
 	if err != nil {
 		return "", err
 	}
-	script.WriteString(fmt.Sprintf("from %s import %s\n", rel, funcName))
 
 	vars, err := injectScriptVars(params)
 	if err != nil {
 		return "", err
 	}
-	script.WriteString(fmt.Sprintf("%s\n", vars))
 
 	invoker, err := injectScriptFuncInvoke(funcName, params)
 	if err != nil {
 		return "", err
 	}
 
-	str := ScriptTemplate
-	str = strings.Replace(str, "{1}", invoker, 1)
-	str = strings.Replace(str, "{2}", ReturnValueStart, 1)
-	str = strings.Replace(str, "{3}", ReturnValueEnd, 1)
-	str = strings.Replace(str, "{4}", ExceptionStart, 1)
-	str = strings.Replace(str, "{5}", ExceptionEnd, 1)
+	str := fmt.Sprintf(Python2ScriptTemplate,
+		rel,
+		funcName,
+		TabString(vars, 4),
+		invoker,
+		ReturnValueStart,
+		ReturnValueEnd,
+		ExceptionStart,
+		ExceptionEnd)
 
 	script.WriteString(str)
 	return script.String(), nil
 }
 
+// getRelativeImportPath function get import path by relative path from current work directory to target python script file.
 func getRelativeImportPath(scriptPath string) (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -170,6 +176,9 @@ func getRelativeImportPath(scriptPath string) (string, error) {
 	return rel, nil
 }
 
+// injectScriptFuncInvoke generate script section to invoke and pass value to an python function,
+// for example:
+//   func1(var1, var2)
 func injectScriptFuncInvoke(funcName string, params []interface{}) (string, error) {
 	var args []string
 	for i, _ := range params {
@@ -179,6 +188,9 @@ func injectScriptFuncInvoke(funcName string, params []interface{}) (string, erro
 	return fmt.Sprintf("%s(%s)", funcName, strings.Join(args, ", ")), nil
 }
 
+// injectScriptVars generate script section to define some variable. for example:
+//   var1 = xxx
+//   var2 = yyy
 func injectScriptVars(params []interface{}) (string, error) {
 	if len(params) < 1 {
 		return "", nil
@@ -208,6 +220,7 @@ func SubStringBetween(str string, prefix string, suffix string) string {
 	return ""
 }
 
+// TabString function add some blank before every line in an string and return new string
 func TabString(str string, tabSize int) string {
 	result := bytes.NewBufferString("")
 
@@ -227,6 +240,9 @@ func TabString(str string, tabSize int) string {
 	return result.String()
 }
 
+// Select function receive an bool flag as first parameter,
+// and return the second or third parameter according to the flag,
+// just like C style operator a ? b : c
 func Select(tf bool, a interface{}, b interface{}) interface{} {
 	if tf {
 		return a
