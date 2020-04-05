@@ -3,12 +3,14 @@ package test
 import (
 	"fmt"
 	"github.com/gitpillow/pfunc"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func TestInvoke(t *testing.T) {
 	result := pfunc.Invoke("./pfunc_test.py", "func1", nil)
 	fmt.Println(result)
+	assert.Equal(t, true, result.NoError)
 
 	result = pfunc.Invoke("pfunc_test.py", "func2", []interface{}{1, 2})
 	fmt.Println(result)

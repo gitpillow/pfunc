@@ -19,7 +19,6 @@ const ReturnValueEnd string = "pfunc_return_end_"
 const ExceptionStart string = "pfunc_exception_start_"
 const ExceptionEnd string = "pfunc_exception_end_"
 const PythonExecutable string = "python"
-
 const PResultToString = `
 python function result: 
     status:
@@ -64,7 +63,6 @@ func (pr PResult) String() string {
 		TabString(pr.Exception.Error(), 8),
 		TabString(pr.TempScript, 8))
 }
-
 
 func Call(scriptPath string, funcName string, params ...interface{}) PResult {
 	return Invoke(scriptPath, funcName, params)
