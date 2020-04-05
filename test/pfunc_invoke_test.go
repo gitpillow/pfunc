@@ -7,21 +7,43 @@ import (
 	"testing"
 )
 
-func TestInvoke(t *testing.T) {
+func TestInvokeWithOutReturn(t *testing.T) {
 	result := pfunc.Invoke("./pfunc_test.py", "func1", nil)
-	fmt.Println(result)
+	fmt.Println(result.Inspect())
 	assert.Equal(t, true, result.NoError)
+	assert.NotEmpty(t, result.TempScript)
+	assert.Empty(t, result.Exception)
+	assert.Equal(t, "null", result.JsonRepresentation)
+}
 
-	result = pfunc.Invoke("pfunc_test.py", "func2", []interface{}{1, 2})
-	fmt.Println(result)
+func TestInvokeWithIntReturn(t *testing.T) {
+	result := pfunc.Invoke("pfunc_test.py", "func2", []interface{}{1, 2})
+	fmt.Println(result.Inspect())
+	assert.Equal(t, true, result.NoError)
+	assert.NotEmpty(t, result.TempScript)
+	assert.Empty(t, result.Exception)
+	assert.Equal(t, 3, result.MustInt())
+}
 
-	result = pfunc.Invoke("pfunc_test.py", "func3", []interface{}{
+func TestInvokeWithStringReturn(t *testing.T) {
+	result := pfunc.Invoke("pfunc_test.py", "func3", []interface{}{
 		map[string]interface{}{"name": "Jack"},
 		map[string]interface{}{"name": "Alice"},
 		map[string]interface{}{"name": "Tom"},
 	})
-	fmt.Println(result)
+	fmt.Println(result.Inspect())
+	assert.Equal(t, true, result.NoError)
+	assert.NotEmpty(t, result.TempScript)
+	assert.Empty(t, result.Exception)
+	assert.Equal(t, "Jack and Alice and Tom", result.MustString())
+}
 
-	result = pfunc.Invoke("pfunc_test.py", "func4", []interface{}{2, 0})
-	fmt.Println(result)
+func TestInvokeWithException(t *testing.T) {
+	result := pfunc.Invoke("pfunc_test.py", "func4", []interface{}{2, 0})
+	fmt.Println(result.Inspect())
+	assert.Equal(t, false, result.NoError)
+	assert.NotEmpty(t, result.TempScript)
+	assert.NotEmpty(t, result.Exception)
+	assert.Empty(t, result.JsonRepresentation)
+	assert.Equal(t, "", result.JsonRepresentation)
 }

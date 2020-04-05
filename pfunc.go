@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -38,9 +39,7 @@ import json
 try:
 %s
     result = %s
-    print "%s",
-    print json.dumps(result),
-    print "%s",
+    print '%s{}%s'.format(json.dumps(result))
 except Exception, e:
     msg = traceback.format_exc()
     print "%s",
@@ -56,12 +55,32 @@ type PResult struct {
 	TempScript         string
 }
 
-func (pr PResult) String() string {
+func (pr PResult) Inspect() string {
 	return fmt.Sprintf(PResultToString,
 		Select(pr.NoError, "success", "fail").(string),
 		TabString(pr.JsonRepresentation, 8),
 		TabString(pr.Exception.Error(), 8),
 		TabString(pr.TempScript, 8))
+}
+
+func (pr PResult) Int() (int, error) {
+	return strconv.Atoi(pr.JsonRepresentation)
+}
+
+func (pr PResult) MustInt() int {
+	i, _ := pr.Int()
+	return i
+}
+
+func (pr PResult) String() (string, error) {
+	var str string
+	err := json.Unmarshal([]byte(pr.JsonRepresentation), &str)
+	return str, err
+}
+
+func (pr PResult) MustString() string {
+	s, _ := pr.String()
+	return s
 }
 
 func Call(scriptPath string, funcName string, params ...interface{}) PResult {
