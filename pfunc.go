@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ const ReturnValueEnd string = "pfunc_return_end_"
 const ExceptionStart string = "pfunc_exception_start_"
 const ExceptionEnd string = "pfunc_exception_end_"
 const PythonExecutable string = "python"
+const PythonPath string = "PYTHONPATH"
 const PResultToString = `
 python function result: 
     status:
@@ -53,6 +55,8 @@ type PResult struct {
 	JsonRepresentation string
 	Exception          error
 	TempScript         string
+	Output             string
+	PythonPath         string
 }
 
 func (pr PResult) Inspect() string {
@@ -94,7 +98,7 @@ func Invoke(scriptPath string, funcName string, params []interface{}) PResult {
 		return result
 	}
 
-	tempScript, err := generateTempScript(scriptPath, funcName, params)
+	tempScript, appendPythonPath, err := generateTempScript(scriptPath, funcName, params)
 	if err != nil {
 		result.Exception = fmt.Errorf("invoke python function error: generate temp script error: %v", err)
 		return result
@@ -102,6 +106,12 @@ func Invoke(scriptPath string, funcName string, params []interface{}) PResult {
 	result.TempScript = tempScript
 
 	cmd := exec.Command(PythonExecutable)
+
+	cmd.Env = os.Environ()
+	if len(appendPythonPath) > 0 {
+		AddEnv(&cmd.Env, PythonPath, appendPythonPath)
+	}
+	result.PythonPath, _ = GetEnv(&cmd.Env, PythonPath)
 
 	sin, err := cmd.StdinPipe()
 	if err != nil {
@@ -114,6 +124,14 @@ func Invoke(scriptPath string, funcName string, params []interface{}) PResult {
 		result.Exception = fmt.Errorf("invoke python function error: pipe stdout of python error: %v", err)
 		return result
 	}
+	defer sout.Close()
+
+	serr, err := cmd.StderrPipe()
+	if err != nil {
+		result.Exception = fmt.Errorf("invoke python function error: pipe stderr of python error: %v", err)
+		return result
+	}
+	defer serr.Close()
 
 	err = cmd.Start()
 	if err != nil {
@@ -134,37 +152,52 @@ func Invoke(scriptPath string, funcName string, params []interface{}) PResult {
 		return result
 	}
 
+	be, err := ioutil.ReadAll(serr)
+	if err != nil {
+		result.Exception = fmt.Errorf("invoke python function error: get python error output error: %v", err)
+		return result
+	}
+
 	output := string(bs)
+	errorOutput := string(be)
+
+	result.Output = output + errorOutput
 	result.JsonRepresentation = SubStringBetween(output, ReturnValueStart, ReturnValueEnd)
 	result.Exception = errors.New(SubStringBetween(output, ExceptionStart, ExceptionEnd))
+
+	if len(errorOutput) > 0 {
+		result.Exception = errors.New(errorOutput)
+	}
 
 	if len(result.Exception.Error()) < 1 {
 		result.NoError = true
 	}
+
 	return result
 }
 
 // generate temp script to send to python interpreter
-func generateTempScript(scriptPath string, funcName string, params []interface{}) (string, error) {
+func generateTempScript(scriptPath string, funcName string, params []interface{}) (string, string, error) {
 	script := bytes.Buffer{}
+	var appendPythonPath string
 
-	rel, err := getRelativeImportPath(scriptPath)
+	from, err := getRelativeImportPath(scriptPath)
 	if err != nil {
-		return "", err
+		from, appendPythonPath = getAbsoluteImportPath(scriptPath)
 	}
 
 	vars, err := injectScriptVars(params)
 	if err != nil {
-		return "", err
+		return "", appendPythonPath, err
 	}
 
 	invoker, err := injectScriptFuncInvoke(funcName, params)
 	if err != nil {
-		return "", err
+		return "", appendPythonPath, err
 	}
 
 	str := fmt.Sprintf(Python2ScriptTemplate,
-		rel,
+		from,
 		funcName,
 		TabString(vars, 4),
 		invoker,
@@ -174,23 +207,44 @@ func generateTempScript(scriptPath string, funcName string, params []interface{}
 		ExceptionEnd)
 
 	script.WriteString(str)
-	return script.String(), nil
+	return script.String(), appendPythonPath, nil
 }
 
-// getRelativeImportPath function get import path by relative path from current work directory to target python script file.
+func GetPythonPaths() []string {
+	env := os.Environ()
+	value, i := GetEnv(&env, PythonPath)
+	if i < 0 || len(strings.TrimSpace(value)) < 1 {
+		return []string{}
+	} else {
+		value = strings.TrimSpace(value)
+		return strings.Split(value, string(os.PathListSeparator))
+	}
+}
+
+// getRelativeImportPath get import path by relative path from PYTHONPATH to target script
 func getRelativeImportPath(scriptPath string) (string, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("can not get relative import path of script %v: %v", scriptPath, err)
+	ps := GetPythonPaths()
+	for _, p := range ps {
+		if b, rel := InPath(p, scriptPath); b {
+			rel = strings.Replace(rel, string(os.PathSeparator)+"..", ".", -1)
+			rel = strings.Replace(rel, string(os.PathSeparator), ".", -1)
+			rel = strings.TrimSuffix(rel, ".py")
+			//if !strings.HasSuffix(rel, "..") {
+			//	rel = "." + rel
+			//}
+			return rel, nil
+		}
 	}
-	abs, _ := filepath.Abs(scriptPath)
-	rel, err := filepath.Rel(wd, abs)
-	if err != nil {
-		return "", fmt.Errorf("can not get relative import path of script %v: %v", scriptPath, err)
-	}
-	rel = strings.Replace(rel, "/..", ".", -1)
-	rel = strings.TrimSuffix(rel, ".py")
-	return rel, nil
+	return "", fmt.Errorf("cannot get relative import path by current PYTHONPATH")
+}
+
+// getAbsoluteImportPath get import path by add the dir of script to PYTHONPATH
+func getAbsoluteImportPath(scriptPath string) (string, string) {
+	p, _ := filepath.Abs(scriptPath)
+	d, _ := filepath.Abs(path.Dir(p))
+	b := filepath.Base(p)
+	b = strings.TrimSuffix(b, ".py")
+	return b, d
 }
 
 // injectScriptFuncInvoke generate script section to invoke and pass value to an python function,
@@ -265,5 +319,59 @@ func Select(tf bool, a interface{}, b interface{}) interface{} {
 		return a
 	} else {
 		return b
+	}
+}
+
+func FindLine(str string, subs ...string) string {
+	scanner := bufio.NewScanner(bytes.NewBufferString(str))
+outer:
+	for scanner.Scan() {
+		for _, sub := range subs {
+			if !strings.Contains(scanner.Text(), sub) {
+				continue outer
+			}
+		}
+		return scanner.Text()
+	}
+	return ""
+}
+
+func GetEnv(env *[]string, key string) (string, int) {
+	for i, item := range *env {
+		if strings.HasPrefix(item, key+"=") {
+			return strings.TrimPrefix(item, key+"="), i
+		}
+	}
+	return "", -1
+}
+
+func AddEnv(env *[]string, key string, value string) {
+	oldValue, i := GetEnv(env, key)
+	if len(oldValue) > 0 {
+		(*env)[i] = (*env)[i] + string(os.PathListSeparator) + value
+	} else if i > -1 {
+		(*env)[i] = key + "=" + value
+	} else {
+		*env = append(*env, key+"="+value)
+	}
+}
+
+func InPath(dir string, sub string) (bool, string) {
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return false, ""
+	}
+	sub, err = filepath.Abs(sub)
+	if err != nil {
+		return false, ""
+	}
+	rel, err := filepath.Rel(dir, sub)
+	if err != nil {
+		return false, ""
+	}
+	if !strings.HasPrefix(rel, ".") {
+		return true, rel
+	} else {
+		return false, ""
 	}
 }
