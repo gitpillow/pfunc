@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -22,6 +21,7 @@ const ExceptionStart string = "pfunc_exception_start_"
 const ExceptionEnd string = "pfunc_exception_end_"
 const PythonExecutable string = "python"
 const PythonPath string = "PYTHONPATH"
+
 const PResultToString = `
 python function result: 
     status:
@@ -85,6 +85,17 @@ func (pr PResult) String() (string, error) {
 func (pr PResult) MustString() string {
 	s, _ := pr.String()
 	return s
+}
+
+func (pr PResult) Float() (float32, error) {
+	var f float32
+	err := json.Unmarshal([]byte(pr.JsonRepresentation), &f)
+	return f, err
+}
+
+func (pr PResult) MustFloat() float32 {
+	f, _ := pr.Float()
+	return f
 }
 
 func Call(scriptPath string, funcName string, params ...interface{}) PResult {
@@ -241,7 +252,7 @@ func getRelativeImportPath(scriptPath string) (string, error) {
 // getAbsoluteImportPath get import path by add the dir of script to PYTHONPATH
 func getAbsoluteImportPath(scriptPath string) (string, string) {
 	p, _ := filepath.Abs(scriptPath)
-	d, _ := filepath.Abs(path.Dir(p))
+	d, _ := filepath.Abs(filepath.Dir(p))
 	b := filepath.Base(p)
 	b = strings.TrimSuffix(b, ".py")
 	return b, d
@@ -282,6 +293,7 @@ func injectScriptVars(params []interface{}) (string, error) {
 	return script.String(), nil
 }
 
+// SubStringBetween return substring between inputted prefix and suffix
 func SubStringBetween(str string, prefix string, suffix string) string {
 	start := strings.Index(str, prefix)
 	end := strings.Index(str, suffix)
@@ -322,6 +334,7 @@ func Select(tf bool, a interface{}, b interface{}) interface{} {
 	}
 }
 
+// FindLine return first line in string which contains inputted substring
 func FindLine(str string, subs ...string) string {
 	scanner := bufio.NewScanner(bytes.NewBufferString(str))
 outer:
@@ -336,6 +349,7 @@ outer:
 	return ""
 }
 
+// GetEnv get env value from env item slice
 func GetEnv(env *[]string, key string) (string, int) {
 	for i, item := range *env {
 		if strings.HasPrefix(item, key+"=") {
@@ -345,6 +359,7 @@ func GetEnv(env *[]string, key string) (string, int) {
 	return "", -1
 }
 
+// AddEnv add env value to env item slice
 func AddEnv(env *[]string, key string, value string) {
 	oldValue, i := GetEnv(env, key)
 	if len(oldValue) > 0 {
@@ -356,6 +371,7 @@ func AddEnv(env *[]string, key string, value string) {
 	}
 }
 
+// InPath check if the dir is parent of sub
 func InPath(dir string, sub string) (bool, string) {
 	dir, err := filepath.Abs(dir)
 	if err != nil {

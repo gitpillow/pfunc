@@ -10,3 +10,6 @@ def func3(a, b, c):
 
 def func4(a, b):
     return a / b
+
+def func5(a, b):
+    return float(a) / float(b)

@@ -9,13 +9,6 @@ import (
 	"testing"
 )
 
-func TestImportScriptInCurrentDir(t *testing.T) {
-	result := pfunc.Invoke("pfunc_test.py", "func2", []interface{}{1, 2})
-	assert.Equal(t, true, result.NoError)
-	importLine := pfunc.FindLine(result.TempScript, "from", "import")
-	fmt.Println(importLine)
-	assert.Contains(t, importLine, "from pfunc_test import func2")
-}
 
 func TestImportScriptInSubDir(t *testing.T) {
 	result := pfunc.Invoke("dirs/a/b/c/pfunc_test.py", "func2", []interface{}{1, 2})
