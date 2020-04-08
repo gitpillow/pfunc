@@ -51,3 +51,4 @@ func TestInvokeWithFloatReturn(t *testing.T) {
 	assert.Equal(t, true, result.NoError)
 	assert.Equal(t, float32(1.5), result.MustFloat())
 }
+

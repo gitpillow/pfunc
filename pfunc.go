@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -59,6 +60,15 @@ type PResult struct {
 	PythonPath         string
 }
 
+type WrapInfo struct {
+	scriptPath  string
+	funcName    string
+	returnType  reflect.Type
+	returnValue interface{}
+	paramTypes  [] reflect.Type
+	paramValues [] interface{}
+}
+
 func (pr PResult) Inspect() string {
 	return fmt.Sprintf(PResultToString,
 		Select(pr.NoError, "success", "fail").(string),
@@ -96,6 +106,45 @@ func (pr PResult) Float() (float32, error) {
 func (pr PResult) MustFloat() float32 {
 	f, _ := pr.Float()
 	return f
+}
+
+func Func(scriptPath string, funcName string) *WrapInfo {
+	wrapInfo := &WrapInfo{}
+	wrapInfo.scriptPath = scriptPath
+	wrapInfo.funcName = funcName
+	return wrapInfo
+}
+
+func (w *WrapInfo) Return(i interface{}) *WrapInfo {
+	t := reflect.TypeOf(i)
+	w.returnType = t
+	w.returnValue = i
+	return w
+}
+
+func (w *WrapInfo) Params(interfaces ...interface{}) *WrapInfo {
+	w.paramTypes = []reflect.Type{}
+	w.paramValues = interfaces
+	for _, i := range interfaces {
+		w.paramTypes = append(w.paramTypes, reflect.TypeOf(i))
+	}
+	return w
+}
+
+func (w *WrapInfo) Do(interfaces ...interface{}) (interface{}, error) {
+	r := Invoke(w.scriptPath, w.funcName, w.paramValues)
+	if r.NoError {
+		i := reflect.New(w.returnType).Interface()
+		err := json.Unmarshal([]byte(r.JsonRepresentation), i)
+		if err != nil {
+			return w.returnValue, err
+		}
+		return i, nil
+	} else {
+		v := reflect.New(w.returnType)
+		reflect.Copy(v, reflect.ValueOf(w.returnValue))
+		return v.Interface(), r.Exception
+	}
 }
 
 func Call(scriptPath string, funcName string, params ...interface{}) PResult {
