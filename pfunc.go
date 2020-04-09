@@ -33,6 +33,8 @@ python function result:
 %v
     temp script:
 %v
+    python path:
+        %v
 `
 
 const Python2ScriptTemplate string = `
@@ -65,8 +67,8 @@ type WrapInfo struct {
 	funcName    string
 	returnType  reflect.Type
 	returnValue interface{}
-	paramTypes  [] reflect.Type
-	paramValues [] interface{}
+	paramTypes  []reflect.Type
+	paramValues []interface{}
 }
 
 func (pr PResult) Inspect() string {
@@ -74,7 +76,8 @@ func (pr PResult) Inspect() string {
 		Select(pr.NoError, "success", "fail").(string),
 		TabString(pr.JsonRepresentation, 8),
 		TabString(pr.Exception.Error(), 8),
-		TabString(pr.TempScript, 8))
+		TabString(pr.TempScript, 8),
+		pr.PythonPath)
 }
 
 func (pr PResult) Int() (int, error) {

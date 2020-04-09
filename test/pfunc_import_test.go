@@ -2,13 +2,13 @@ package test
 
 import (
 	"fmt"
-	"github.com/gitpillow/pfunc"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
 	"testing"
-)
 
+	"github.com/gitpillow/pfunc"
+	"github.com/stretchr/testify/assert"
+)
 
 func TestImportScriptInSubDir(t *testing.T) {
 	result := pfunc.Invoke("dirs/a/b/c/pfunc_test.py", "func2", []interface{}{1, 2})
@@ -49,6 +49,7 @@ func TestImportScriptInSubDirWithPythonPath2(t *testing.T) {
 	fmt.Println(newpp)
 
 	result := pfunc.Invoke("dirs/a/b/c/pfunc_test.py", "func2", []interface{}{1, 2})
+	fmt.Println(result.Inspect())
 	assert.Equal(t, true, result.NoError)
 	importLine := pfunc.FindLine(result.TempScript, "from", "import")
 	fmt.Println(importLine)
