@@ -139,11 +139,11 @@ func (w *WrapInfo) Do(interfaces ...interface{}) (interface{}, error) {
 		if err != nil {
 			return w.returnValue, err
 		}
-		return i, nil
+		return reflect.ValueOf(i).Elem().Interface(), nil
 	} else {
-		v := reflect.New(w.returnType)
-		reflect.Copy(v, reflect.ValueOf(w.returnValue))
-		return v.Interface(), r.Exception
+		e := reflect.New(w.returnType).Elem()
+		e.Set(reflect.ValueOf(w.returnValue))
+		return e.Interface(), r.Exception
 	}
 }
 

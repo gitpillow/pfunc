@@ -12,11 +12,15 @@ func divide(a int, b int) (int, error) {
 		Return(int(0)).
 		Do()
 
-	return *i.(*int), err
+	return i.(int), err
 }
 
 func TestWrapFunction(t *testing.T) {
 	i, e := divide(6, 3)
+	fmt.Println(i)
+	fmt.Println(e)
+
+	i, e = divide(6, 0)
 	fmt.Println(i)
 	fmt.Println(e)
 }
