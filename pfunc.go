@@ -42,6 +42,7 @@ from %s import %s
 import traceback
 import json
 try:
+    null = None
 %s
     result = %s
     print '%s{}%s'.format(json.dumps(result))
@@ -63,12 +64,14 @@ type PResult struct {
 }
 
 type WrapInfo struct {
-	scriptPath  string
-	funcName    string
-	returnType  reflect.Type
-	returnValue interface{}
-	paramTypes  []reflect.Type
-	paramValues []interface{}
+	scriptPath         string
+	funcName           string
+	returnType         reflect.Type
+	returnValue        interface{}
+	paramTypes         []reflect.Type
+	paramValues        []interface{}
+	paramDefaultValues []interface{}
+	wrapError          []error
 }
 
 func (pr PResult) Inspect() string {
@@ -134,7 +137,46 @@ func (w *WrapInfo) Params(interfaces ...interface{}) *WrapInfo {
 	return w
 }
 
+func (w *WrapInfo) ParamDefaults(interfaces ...interface{}) *WrapInfo {
+	w.paramDefaultValues = interfaces
+	return w
+}
+
+func (w *WrapInfo) VarArgs(varargs interface{}) *WrapInfo {
+	t := reflect.TypeOf(varargs)
+	k := t.Kind()
+	if k != reflect.Slice {
+		w.wrapError = append(w.wrapError, fmt.Errorf("varargs is not of slice type"))
+	} else {
+		var params []interface{}
+		v := reflect.ValueOf(varargs)
+		for i := 0; i < v.Len(); i++ {
+			e := v.Index(i)
+			params = append(params, e.Interface())
+		}
+		w.Params(params...)
+	}
+	return w
+}
+
 func (w *WrapInfo) Do(interfaces ...interface{}) (interface{}, error) {
+
+	if w.returnType == nil {
+		return nil, fmt.Errorf("return type is not set")
+	}
+
+	if len(w.wrapError) > 0 {
+		return nil, w.wrapError[0]
+	}
+
+	if len(w.paramDefaultValues) > 0 {
+		for i, d := range w.paramDefaultValues {
+			if i >= len(w.paramValues) {
+				w.paramValues = append(w.paramValues, d)
+			}
+		}
+	}
+
 	r := Invoke(w.scriptPath, w.funcName, w.paramValues)
 	if r.NoError {
 		i := reflect.New(w.returnType).Interface()

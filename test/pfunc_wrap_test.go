@@ -47,6 +47,16 @@ func GetPersonMap(name string, age int, hobby1 string, hobby2 string) (map[strin
 	return i.(map[string]interface{}), err
 }
 
+func NamesOfThreePeople(ps ...Person) (string, error) {
+	i, err := pfunc.Func("dirs/a/b/c/pfunc_test.py", "names_of_three_people").
+		ParamDefaults(Person{Name: "SomeOne"}, Person{Name: "OtherOne"}, Person{Name: "AnotherOne"}).
+		VarArgs(ps).
+		Return("").
+		Do()
+
+	return i.(string), err
+}
+
 func TestWrapFunction(t *testing.T) {
 	i, e := divide(6, 3)
 	fmt.Println(i)
@@ -93,4 +103,18 @@ func TestWrapFunctionReturnMap(t *testing.T) {
 			}},
 		personMap)
 	assert.Nil(t, nil)
+}
+
+func TestWrapFunctionWithParamDefaults(t *testing.T) {
+	names, err := NamesOfThreePeople()
+	fmt.Println(names)
+	fmt.Println(err)
+
+	names, err = NamesOfThreePeople(Person{Name: "Tom"})
+	fmt.Println(names)
+	fmt.Println(err)
+
+	names, err = NamesOfThreePeople(Person{Name: "Tom"}, Person{Name: "Jack"})
+	fmt.Println(names)
+	fmt.Println(err)
 }
