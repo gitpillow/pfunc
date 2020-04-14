@@ -1,21 +1,21 @@
 
-def func1():
-    print "this is func1"
+def do_print():
+    print "hello world"
 
 
-def func2(a, b):
+def add(a, b):
     return a + b
 
 
-def func3(a, b, c):
+def names_of_three_people(a, b, c):
     return a['name'] + " and " + b['name'] + " and " + c['name']
 
 
-def func4(a, b):
+def divide(a, b):
     return a / b
 
 
-def func5(a, b):
+def float_divide(a, b):
     return float(a) / float(b)
 
 

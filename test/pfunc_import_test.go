@@ -11,11 +11,11 @@ import (
 )
 
 func TestImportScriptInSubDir(t *testing.T) {
-	result := pfunc.Invoke("dirs/a/b/c/pfunc_test.py", "func2", []interface{}{1, 2})
+	result := pfunc.Invoke("dirs/a/b/c/pfunc_test.py", "add", []interface{}{1, 2})
 	assert.Equal(t, true, result.NoError)
 	importLine := pfunc.FindLine(result.TempScript, "from", "import")
 	fmt.Println(importLine)
-	assert.Contains(t, importLine, "from pfunc_test import func2")
+	assert.Contains(t, importLine, "from pfunc_test import add")
 }
 
 func TestImportScriptInSubDirWithPythonPath(t *testing.T) {
@@ -28,11 +28,11 @@ func TestImportScriptInSubDirWithPythonPath(t *testing.T) {
 	newpp := os.Getenv(pfunc.PythonPath)
 	fmt.Println(newpp)
 
-	result := pfunc.Invoke("dirs/a/b/c/pfunc_test.py", "func2", []interface{}{1, 2})
+	result := pfunc.Invoke("dirs/a/b/c/pfunc_test.py", "add", []interface{}{1, 2})
 	assert.Equal(t, true, result.NoError)
 	importLine := pfunc.FindLine(result.TempScript, "from", "import")
 	fmt.Println(importLine)
-	assert.Contains(t, importLine, "from c.pfunc_test import func2")
+	assert.Contains(t, importLine, "from c.pfunc_test import add")
 
 	os.Setenv(pfunc.PythonPath, oldpp)
 }
@@ -48,12 +48,12 @@ func TestImportScriptInSubDirWithPythonPath2(t *testing.T) {
 	newpp := os.Getenv(pfunc.PythonPath)
 	fmt.Println(newpp)
 
-	result := pfunc.Invoke("dirs/a/b/c/pfunc_test.py", "func2", []interface{}{1, 2})
+	result := pfunc.Invoke("dirs/a/b/c/pfunc_test.py", "add", []interface{}{1, 2})
 	fmt.Println(result.Inspect())
 	assert.Equal(t, true, result.NoError)
 	importLine := pfunc.FindLine(result.TempScript, "from", "import")
 	fmt.Println(importLine)
-	assert.Contains(t, importLine, "from b.c.pfunc_test import func2")
+	assert.Contains(t, importLine, "from b.c.pfunc_test import add")
 
 	os.Setenv(pfunc.PythonPath, oldpp)
 }
