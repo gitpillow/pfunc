@@ -28,3 +28,9 @@ def func_return_struct(name, age, hobby1, hobby2):
             hobby2
         ]
     }
+
+
+def first_param_and_other_params(first, **other):
+    total = other
+    total['first'] = first
+    return total

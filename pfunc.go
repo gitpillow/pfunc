@@ -71,6 +71,7 @@ type WrapInfo struct {
 	paramTypes         []reflect.Type
 	paramValues        []interface{}
 	paramDefaultValues []interface{}
+	Keywords           map[string]interface{}
 	wrapError          []error
 }
 
@@ -137,6 +138,14 @@ func (w *WrapInfo) Params(interfaces ...interface{}) *WrapInfo {
 	return w
 }
 
+func (w *WrapInfo) KeyWrodParam(keyword string, value interface{}) *WrapInfo {
+	if w.Keywords == nil {
+		w.Keywords = map[string]interface{}{}
+	}
+	w.Keywords[keyword] = value
+	return w
+}
+
 func (w *WrapInfo) ParamDefaults(interfaces ...interface{}) *WrapInfo {
 	w.paramDefaultValues = interfaces
 	return w
@@ -177,7 +186,7 @@ func (w *WrapInfo) Do(interfaces ...interface{}) (interface{}, error) {
 		}
 	}
 
-	r := Invoke(w.scriptPath, w.funcName, w.paramValues)
+	r := doInvoke(w.scriptPath, w.funcName, w.paramValues, w.Keywords)
 	if r.NoError {
 		i := reflect.New(w.returnType).Interface()
 		err := json.Unmarshal([]byte(r.JsonRepresentation), i)
@@ -197,13 +206,17 @@ func Call(scriptPath string, funcName string, params ...interface{}) PResult {
 }
 
 func Invoke(scriptPath string, funcName string, params []interface{}) PResult {
+	return doInvoke(scriptPath, funcName, params, nil)
+}
+
+func doInvoke(scriptPath string, funcName string, params []interface{}, kw map[string]interface{}) PResult {
 	result := PResult{}
 	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
 		result.Exception = fmt.Errorf("invoke python function error: python script not exists: %v: %v", scriptPath, err)
 		return result
 	}
 
-	tempScript, appendPythonPath, err := generateTempScript(scriptPath, funcName, params)
+	tempScript, appendPythonPath, err := generateTempScript(scriptPath, funcName, params, kw)
 	if err != nil {
 		result.Exception = fmt.Errorf("invoke python function error: generate temp script error: %v", err)
 		return result
@@ -282,7 +295,7 @@ func Invoke(scriptPath string, funcName string, params []interface{}) PResult {
 }
 
 // generate temp script to send to python interpreter
-func generateTempScript(scriptPath string, funcName string, params []interface{}) (string, string, error) {
+func generateTempScript(scriptPath string, funcName string, params []interface{}, kw map[string]interface{}) (string, string, error) {
 	script := bytes.Buffer{}
 	var appendPythonPath string
 
@@ -291,12 +304,12 @@ func generateTempScript(scriptPath string, funcName string, params []interface{}
 		from, appendPythonPath = getAbsoluteImportPath(scriptPath)
 	}
 
-	vars, err := injectScriptVars(params)
+	vars, err := injectScriptVars(params, kw)
 	if err != nil {
 		return "", appendPythonPath, err
 	}
 
-	invoker, err := injectScriptFuncInvoke(funcName, params)
+	invoker, err := injectScriptFuncInvoke(funcName, params, kw)
 	if err != nil {
 		return "", appendPythonPath, err
 	}
@@ -355,11 +368,17 @@ func getAbsoluteImportPath(scriptPath string) (string, string) {
 // injectScriptFuncInvoke generate script section to invoke and pass value to an python function,
 // for example:
 //   func1(var1, var2)
-func injectScriptFuncInvoke(funcName string, params []interface{}) (string, error) {
+func injectScriptFuncInvoke(funcName string, params []interface{}, kw map[string]interface{}) (string, error) {
 	var args []string
 	for i, _ := range params {
 		varName := fmt.Sprintf("%s%d", InjectVarNamePrefix, i)
 		args = append(args, varName)
+	}
+	if kw != nil {
+		for k, _ := range kw {
+			varNameValue := fmt.Sprintf("%s = %s_%s", k, InjectVarNamePrefix, k)
+			args = append(args, varNameValue)
+		}
 	}
 	return fmt.Sprintf("%s(%s)", funcName, strings.Join(args, ", ")), nil
 }
@@ -367,7 +386,7 @@ func injectScriptFuncInvoke(funcName string, params []interface{}) (string, erro
 // injectScriptVars generate script section to define some variable. for example:
 //   var1 = xxx
 //   var2 = yyy
-func injectScriptVars(params []interface{}) (string, error) {
+func injectScriptVars(params []interface{}, kw map[string]interface{}) (string, error) {
 	if len(params) < 1 {
 		return "", nil
 	}
@@ -382,6 +401,18 @@ func injectScriptVars(params []interface{}) (string, error) {
 		}
 		varValue := string(bs)
 		script.WriteString(fmt.Sprintf("%s = %s\n", varName, varValue))
+	}
+
+	if kw != nil {
+		for k, v := range kw {
+			varName := fmt.Sprintf("%s_%s", InjectVarNamePrefix, k)
+			bs, err := json.Marshal(v)
+			if err != nil {
+				return "", fmt.Errorf("can not serialize keyword param to json value: %v", err)
+			}
+			varValue := string(bs)
+			script.WriteString(fmt.Sprintf("%s = %s\n", varName, varValue))
+		}
 	}
 
 	return script.String(), nil

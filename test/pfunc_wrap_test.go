@@ -57,6 +57,18 @@ func NamesOfThreePeople(ps ...Person) (string, error) {
 	return i.(string), err
 }
 
+func FirstParamAndOtherParams(first interface{}, name string, age int, hobby []string) (map[string]interface{}, error) {
+	r, err := pfunc.Func("dirs/a/b/c/pfunc_test.py", "first_param_and_other_params").
+		Params(first).
+		KeyWrodParam("name", name).
+		KeyWrodParam("age", age).
+		KeyWrodParam("hobby", hobby).
+		Return(map[string]interface{}{}).
+		Do()
+
+	return r.(map[string]interface{}), err
+}
+
 func TestWrapFunction(t *testing.T) {
 	i, e := divide(6, 3)
 	fmt.Println(i)
@@ -109,12 +121,30 @@ func TestWrapFunctionWithParamDefaults(t *testing.T) {
 	names, err := NamesOfThreePeople()
 	fmt.Println(names)
 	fmt.Println(err)
+	assert.Equal(t, "SomeOne and OtherOne and AnotherOne", names)
+	assert.Nil(t, err)
 
 	names, err = NamesOfThreePeople(Person{Name: "Tom"})
 	fmt.Println(names)
 	fmt.Println(err)
+	assert.Equal(t, "Tom and OtherOne and AnotherOne", names)
+	assert.Nil(t, err)
 
 	names, err = NamesOfThreePeople(Person{Name: "Tom"}, Person{Name: "Jack"})
 	fmt.Println(names)
 	fmt.Println(err)
+	assert.Equal(t, "Tom and Jack and AnotherOne", names)
+	assert.Nil(t, err)
+}
+
+func TestWrapFunctionWithKeyWordParams(t *testing.T) {
+	r, err := FirstParamAndOtherParams("Lee", "Ming", 33, []string{"Video Game", "Programing"})
+	fmt.Println(r)
+	fmt.Println(err)
+	assert.Equal(t, r, map[string]interface{}{
+		"first": "Lee",
+		"name":  "Ming",
+		"age":   float64(33),
+		"hobby": []interface{}{"Video Game", "Programing"},
+	})
 }
