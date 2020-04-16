@@ -15,13 +15,85 @@ import (
 	"strings"
 )
 
-const InjectVarNamePrefix string = "pfunc_inject_"
-const ReturnValueStart string = "pfunc_return_start_"
-const ReturnValueEnd string = "pfunc_return_end_"
-const ExceptionStart string = "pfunc_exception_start_"
-const ExceptionEnd string = "pfunc_exception_end_"
-const PythonExecutable string = "python"
 const PythonPath string = "PYTHONPATH"
+
+var pythonExecutable = "python"
+
+const InjectVarNamePrefixDefault = "pfunc_inject_"
+const ReturnValueStartDefault = "pfunc_return_start_"
+const ReturnValueEndDefault = "pfunc_return_end_"
+const ExceptionStartDefault = "pfunc_exception_start_"
+const ExceptionEndDefault = "pfunc_exception_end_"
+
+var injectVarNamePrefix = InjectVarNamePrefixDefault
+var returnValueStart = ReturnValueStartDefault
+var returnValueEnd = ReturnValueEndDefault
+var exceptionStart = ExceptionStartDefault
+var exceptionEnd = ExceptionEndDefault
+
+func GetInjectVarNamePrefix() string {
+	return injectVarNamePrefix
+}
+
+func SetInjectVarNamePrefix(s string) {
+	injectVarNamePrefix = s
+}
+
+func GetReturnValueStart() string {
+	return returnValueStart
+}
+
+func SetReturnValueStart(s string) {
+	returnValueStart = s
+}
+
+func GetReturnValueEnd() string {
+	return returnValueEnd
+}
+
+func SetReturnValueEnd(s string) {
+	returnValueEnd = s
+}
+
+func GetExceptionStart() string {
+	return exceptionStart
+}
+
+func SetExceptionStart(s string) {
+	exceptionStart = s
+}
+
+func GetExceptionEnd() string {
+	return exceptionEnd
+}
+
+func SetExceptionEnd(s string) {
+	exceptionEnd = s
+}
+
+func GetPythonExecutable() string {
+	return pythonExecutable
+}
+
+func SetPythonExecutable(s string) {
+	pythonExecutable = s
+}
+
+func AddTemplateElementNamesPrefix(s string) {
+	SetInjectVarNamePrefix(s + InjectVarNamePrefixDefault)
+	SetReturnValueStart(s + ReturnValueStartDefault)
+	SetReturnValueEnd(s + ReturnValueEndDefault)
+	SetExceptionStart(s + ExceptionStartDefault)
+	SetExceptionEnd(s + ExceptionEndDefault)
+}
+
+func ResetTemplateElementNames() {
+	SetInjectVarNamePrefix(InjectVarNamePrefixDefault)
+	SetReturnValueStart(ReturnValueStartDefault)
+	SetReturnValueEnd(ReturnValueEndDefault)
+	SetExceptionStart(ExceptionStartDefault)
+	SetExceptionEnd(ExceptionEndDefault)
+}
 
 const PResultToString = `
 python function result: 
@@ -223,7 +295,7 @@ func doInvoke(scriptPath string, funcName string, params []interface{}, kw map[s
 	}
 	result.TempScript = tempScript
 
-	cmd := exec.Command(PythonExecutable)
+	cmd := exec.Command(pythonExecutable)
 
 	cmd.Env = os.Environ()
 	if len(appendPythonPath) > 0 {
@@ -280,8 +352,8 @@ func doInvoke(scriptPath string, funcName string, params []interface{}, kw map[s
 	errorOutput := string(be)
 
 	result.Output = output + errorOutput
-	result.JsonRepresentation = SubStringBetween(output, ReturnValueStart, ReturnValueEnd)
-	result.Exception = errors.New(SubStringBetween(output, ExceptionStart, ExceptionEnd))
+	result.JsonRepresentation = SubStringBetween(output, returnValueStart, returnValueEnd)
+	result.Exception = errors.New(SubStringBetween(output, exceptionStart, exceptionEnd))
 
 	if len(errorOutput) > 0 {
 		result.Exception = errors.New(errorOutput)
@@ -319,10 +391,10 @@ func generateTempScript(scriptPath string, funcName string, params []interface{}
 		funcName,
 		TabString(vars, 4),
 		invoker,
-		ReturnValueStart,
-		ReturnValueEnd,
-		ExceptionStart,
-		ExceptionEnd)
+		returnValueStart,
+		returnValueEnd,
+		exceptionStart,
+		exceptionEnd)
 
 	script.WriteString(str)
 	return script.String(), appendPythonPath, nil
@@ -371,12 +443,12 @@ func getAbsoluteImportPath(scriptPath string) (string, string) {
 func injectScriptFuncInvoke(funcName string, params []interface{}, kw map[string]interface{}) (string, error) {
 	var args []string
 	for i, _ := range params {
-		varName := fmt.Sprintf("%s%d", InjectVarNamePrefix, i)
+		varName := fmt.Sprintf("%s%d", injectVarNamePrefix, i)
 		args = append(args, varName)
 	}
 	if kw != nil {
 		for k, _ := range kw {
-			varNameValue := fmt.Sprintf("%s = %s_%s", k, InjectVarNamePrefix, k)
+			varNameValue := fmt.Sprintf("%s = %s_%s", k, injectVarNamePrefix, k)
 			args = append(args, varNameValue)
 		}
 	}
@@ -394,7 +466,7 @@ func injectScriptVars(params []interface{}, kw map[string]interface{}) (string, 
 	script := bytes.Buffer{}
 
 	for i, param := range params {
-		varName := fmt.Sprintf("%s%d", InjectVarNamePrefix, i)
+		varName := fmt.Sprintf("%s%d", injectVarNamePrefix, i)
 		bs, err := json.Marshal(param)
 		if err != nil {
 			return "", fmt.Errorf("can not serialize param to json value: %v", err)
@@ -405,7 +477,7 @@ func injectScriptVars(params []interface{}, kw map[string]interface{}) (string, 
 
 	if kw != nil {
 		for k, v := range kw {
-			varName := fmt.Sprintf("%s_%s", InjectVarNamePrefix, k)
+			varName := fmt.Sprintf("%s_%s", injectVarNamePrefix, k)
 			bs, err := json.Marshal(v)
 			if err != nil {
 				return "", fmt.Errorf("can not serialize keyword param to json value: %v", err)
