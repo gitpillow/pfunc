@@ -66,24 +66,29 @@ It is simple to wrap an python function, too
 
 #### function with position params
 
+pfunc_test.py
 ```python
 def add(a, b):
     return a + b
 ```
 
+Go code
 ```go
 func divide(a int, b int) (int, error) {
-	i, err := pfunc.Func("dirs/a/b/c/pfunc_test.py", "divide").
-		Params(a, b).
-		Return(int(0)).
-		Do()
+	i, err := pfunc.Func("dirs/a/b/c/pfunc_test.py", "divide").             // set script path, set function name
+		Params(a, b).                                                       // set parameters type and value
+		Return(int(0)).                                                     // set return type and default return value
+		Do()                                                                // invoke
 
-	return i.(int), err
+	return i.(int), err                                                     // type cast and return
 }
 
 i, e := divide(6, 3)
 fmt.Println(i)
 fmt.Println(e)
+if e != nil {
+    // error handle
+}
 ```
 
 output:
@@ -91,6 +96,66 @@ output:
 2
 <nil>
 ```
+
+#### function return struct or map[string]interface{}
+
+pfunc_test.py
+```python
+def func_return_struct(name, age, hobby1, hobby2):
+    return {
+        "name": name,
+        "age": age,
+        "hobby": [
+            hobby1,
+            hobby2
+        ]
+    }
+```
+
+Go code
+```go
+func GetPerson(name string, age int, hobby1 string, hobby2 string) (Person, error) {
+	i, err := pfunc.Func("dirs/a/b/c/pfunc_test.py", "func_return_struct").                 // set script path , set function name
+		Params(name, age, hobby1, hobby2).                                                  // set parameter types and values
+		Return(Person{                                                                      // set return type and default return value
+			Name:  "Nobody",
+			Age:   0,
+			Hobby: []string{},
+		}).
+		Do()                                                                                // invoke
+
+	return i.(Person), err                                                                  // type cast and return
+}
+
+/// wrap func_return_struct function in python script to assemble a map with string keys
+func GetPersonMap(name string, age int, hobby1 string, hobby2 string) (map[string]interface{}, error) {
+	i, err := pfunc.Func("dirs/a/b/c/pfunc_test.py", "func_return_struct").                 // set script path, set function name
+		Params(name, age, hobby1, hobby2).                                                  // set parameter types and values
+		Return(map[string]interface{}{}).                                                   // set return type and default return value
+		Do()                                                                                // invoke
+
+	return i.(map[string]interface{}), err                                                  // type cast and return
+}
+
+person, err := GetPerson("Tom", 33, "Football", "Shopping")
+fmt.Println(person)
+fmt.Println(err)
+
+personMap, err := GetPersonMap("Tom", 33, "Football", "Shopping")
+fmt.Println(personMap)
+fmt.Println(err)
+
+```
+
+output:
+```shell script
+{Tom 33 [Football Shopping]}
+<nil>
+
+map[age:33 hobby:[Football Shopping] name:Tom]
+<nil>
+```
+
 
 ## configure
 
