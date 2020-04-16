@@ -31,5 +31,66 @@ result.Output                   // temp script execution output
 result.PythonPath               // PYTHONPATH env value of current execution
 ```
 
+output
+```shell script
+python function result: 
+    status:
+        success
+    return value:
+        3
+    exception:
+
+    temp script:
+        
+        from pfunc_test import add
+        import traceback
+        import json
+        try:
+            null = None
+            pfunc_inject_0 = 1
+            pfunc_inject_1 = 2
+            result = add(pfunc_inject_0, pfunc_inject_1)
+            print 'pfunc_return_start_{}pfunc_return_end_'.format(json.dumps(result))
+        except Exception, e:
+            msg = traceback.format_exc()
+            print "pfunc_exception_start_",
+            print msg,
+            print "pfunc_exception_end_",
+    python path:
+        D:\projects\pfunc\test\dirs\a\b\c
+```
+
+### wrap python function as go function
+
+It is simple to wrap an python function, too
+
+#### function with position params
+
+```python
+def add(a, b):
+    return a + b
+```
+
+```go
+func divide(a int, b int) (int, error) {
+	i, err := pfunc.Func("dirs/a/b/c/pfunc_test.py", "divide").
+		Params(a, b).
+		Return(int(0)).
+		Do()
+
+	return i.(int), err
+}
+
+i, e := divide(6, 3)
+fmt.Println(i)
+fmt.Println(e)
+```
+
+output:
+```shell script
+2
+<nil>
+```
+
 ## configure
 
